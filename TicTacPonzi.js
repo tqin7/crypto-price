@@ -1,25 +1,5 @@
 pragma solidity ^0.4.0;
 
-contract mortal {
-  address public owner;
-
-  function mortal() {
-    owner = msg.sender;
-  }
-
-  modifier onlyOwner {
-    if (msg.sender != owner) {
-      throw;
-    } else {
-      _;
-    }
-  }
-
-  function kill() onlyOwner{
-    suicide(owner);
-  }
-}
-
 //@title Tic-Tac-Toe combined with Ponzi scheme
 contract TicTacPonzi {
   //Deployer of the game contract
@@ -34,20 +14,28 @@ contract TicTacPonzi {
 
   //A complex type that represents a player
   struct Player {
-    bool isActive;
-    bool isPayee;
-    uint balance;
-    uint8 token;
+    address playerAddress;
+    uint paid;
+    uint payback;
+  }
+
+  struct Underdog {
+    address returnAddress;
+    uint amount;
   }
 
   /*Accounts that have paid >= threshold
    that are able to participate in the game*/
-  mapping (address=>Player) players;
+  mapping(uint8=>Player) players;
+
+  uint8 num_of_players = 0;
 
   /*Accounts that have paid < threshold, cannot
   participate in the game but funds will be returned
   when the game ends.*/
-  mapping (address=>uint) underdogs;
+  mapping (uint8=>Underdog) underdogs;
+
+  uint8 num_of_underdogs;
 
   modifier hasValue {
     if (msg.value > 0) {
@@ -57,35 +45,53 @@ contract TicTacPonzi {
     }
   }
 
-  /** Setting Up Game*/
-  function TicTacPonzi(uint _threshold) payable hasValue{
-    if (_threshold > msg.value) {
+  modifier gameFull {
+    if (num_of_players == 2) {
       throw;
-    }
-    creator = msg.sender;
-    threshold = _threshold;
-    players[creator] = Player({
-      isActive: true,
-      isPayee: true,
-      balance: msg.value,
-      token: 1
-    });
-  }
-
-  function challengerJoin() public payable hasValue{
-    if (msg.value < threshold) {
-      underdogs[msg.sender] = msg.value;
     } else {
-      players[msg.sender] = Player({
-        isActive: true,
-        isPayee: false,
-        balance: msg.value,
-        token: 2
-      });
+      _;
     }
   }
 
-  function checkThreshold() public {
+  modifier onlyCreator {
+    if (msg.sender != creator) {
+      throw;
+    } else {
+      _;
+    }
+  }
+
+  /** Setting Up Game*/
+  function TicTacPonzi() payable hasValue{
+    creator = msg.sender;
+    threshold = msg.value * uint(11) / uint(10);
+    players[1] = Player({
+      playerAddress: msg.sender,
+      paid: msg.value,
+      payback: 0
+    });
+    num_of_players += 1;
+  }
+
+  function challengerJoin() public payable hasValue gameFull{
+    if (msg.value < threshold) {
+      underdogs[num_of_underdogs] = Underdog({
+        returnAddress: msg.sender,
+        amount: msg.value
+      });
+      num_of_underdogs += 1;
+    } else {
+      players[2] = Player({
+        playerAddress: msg.sender,
+        paid: msg.value,
+        payback: 0
+      });
+      num_of_players += 1;
+    }
+  }
+
+  /** Shows players what the current threshold is*/
+  function showThreshold() public returns (uint){
     return threshold;
   }
 
@@ -97,28 +103,55 @@ contract TicTacPonzi {
   //Token of winner
   uint8 winner = 0;
 
-  function makeMove(uint8 _row, uint _col) public {
-    if (players[msg.sender].isActive == true && turn == players[msg.sender].token && board[_row - 1][_col - 1] == 0) {
-      board[_row - 1][_col - 1] = players[msg.sender].token;
-      event(players[msg.sender].token, _row, _col);
+  function makeMove(uint8 _row, uint8 _col) public {
+    if (_row > 3 || _col > 3 || players[turn].playerAddress != msg.sender
+      || board[_row - 1][_col - 1] != 0) {
+      throw;
+    } else {
+      board[_row - 1][_col - 1] = turn;
+      madeMove(turn, _row, _col);
       checkWinner();
       changeTurn();
-    } else {
-      throw;
     }
   }
 
   function checkWinner() private {
     winner = checkBoard();
     if (winner != 0) {
-
+      Won(winner);
+      reset(winner);
       Won(winner);
     }
   }
 
+  function sendMoney(address _recipient, uint _amount) {
+    if (!_recipient.send(_amount)) {
+      throw;
+    }
+  }
+
   /** Resets game depending on who wins*/
-  function reset() private{
-    
+  function reset(uint8 winner) private {
+    //If payee wins
+    if (winner == 1) {
+      players[1].payback = players[2].paid - players[1].paid;
+      sendMoney(players[1].playerAddress, players[1].payback);
+    } else {  //if challenger wins
+      sendMoney(players[1].playerAddress, players[1].paid);
+      threshold = players[2].paid;
+    }
+    players[1] = players[2];
+    delete players[2];
+    resetBoard();
+    num_of_players -= 1;
+  }
+
+  function resetBoard() {
+    for (uint i = 0; i < board.length; i++) {
+      board[i][0] = 0;
+      board[i][1] = 0;
+      board[i][2] = 0;
+    }
   }
 
   /** Modify uint8 turn */
@@ -163,5 +196,14 @@ contract TicTacPonzi {
     }
   }
 
+  /** Clear the contract */
+  function kill() onlyCreator {
+    for (uint8 i = 0; i < num_of_underdogs; i++) {
+      sendMoney(underdogs[i].returnAddress, underdogs[i].amount);
+    }
+    sendMoney(players[1].playerAddress, players[1].paid);
+    sendMoney(players[2].playerAddress, players[2].paid);
+    suicide(creator);
+  }
 
 }
