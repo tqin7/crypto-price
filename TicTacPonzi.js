@@ -5,11 +5,15 @@ contract Contract {
   address public creator;
   //Minimum amount of ether required to participate
   uint public threshold;
+  //Latest blockstamp, used to set time limit for players
+  uint lastUpdate;
 
   //Console logs event when move is made
   event madeMove(string prefix, uint8 rowNum, string column, uint8 col);
 
   event Won(string player);
+
+  event kickedout(string player);
 
   //A complex type that represents a player
   struct Player {
@@ -59,6 +63,29 @@ contract Contract {
       _;
     }
   }
+
+  modifier noTardy {
+    if (num_of_players == 2 && now - lastUpdate > 1 hours) {
+      kickOut(turn);
+      if (turn == 1){
+        kickedout("Payee");
+      } else {
+        kickedout("Challenger");
+      }
+      
+    }
+    _;
+  }
+
+  function kickOut(uint8 player) private {
+    sendMoney(players[player].playerAddress, players[player].paid);
+    if (player == 1) {
+      delete players[1];
+      players[1] = copyPlayer(2);
+    }
+    delete players[2];
+
+  }
   
   function payeeState() constant returns (uint8[2]) {
       return [uint8(players[1].paid), uint8(players[1].payback)];
@@ -90,9 +117,10 @@ contract Contract {
       payback: 0
     });
     num_of_players += 1;
+    lastUpdate = now;
   }
   
-  function challengerJoin() public payable hasValue gameFull{
+  function challengerJoin() public noTardy payable hasValue gameFull {
     if (msg.value < threshold) {
       underdogs[num_of_underdogs] = Underdog({
         returnAddress: msg.sender,
@@ -123,6 +151,7 @@ contract Contract {
       throw;
     } else {
       board[_row - 1][_col - 1] = turn;
+      lastUpdate = block.timestamp;
       if (turn == 1) {
           madeMove("Payee--row: ", _row, "column: ", _col);
       } else {
@@ -151,6 +180,15 @@ contract Contract {
     }
   }
 
+  /** Create a copy of a player*/
+  function copyPlayer(uint8 token) private returns (Player) {
+    return Player({
+      playerAddress: players[token].playerAddress,
+      paid: players[token].paid,
+      payback: players[token].payback
+    });
+  }
+
 
   /** Resets game depending on who wins*/
   function reset(uint8 winner) private {
@@ -162,11 +200,7 @@ contract Contract {
       sendMoney(players[1].playerAddress, players[1].paid);
       threshold = players[2].paid;
     }
-    players[1] = Player({
-      playerAddress: players[2].playerAddress,
-      paid: players[2].paid,
-      payback: players[2].payback
-    });
+    players[1] = copyPlayer(2);
     delete players[2];
     resetBoard();
     num_of_players -= 1;
