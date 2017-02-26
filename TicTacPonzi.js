@@ -9,11 +9,15 @@ contract Contract {
   uint lastUpdate;
 
   //Console logs event when move is made
-  event madeMove(string prefix, uint8 rowNum, string column, uint8 col);
+  event madeMove(bytes32 prefix, uint8 rowNum, bytes8 column, uint8 col);
 
-  event Won(string player);
+  event row_1(uint8[3] row1);
+  event row_2(uint8[3] row2);
+  event row_3(uint8[3] row3);
 
-  event kickedout(string player);
+  event Won(bytes12 player);
+
+  event kickedout(address player);
 
   //A complex type that represents a player
   struct Player {
@@ -65,14 +69,9 @@ contract Contract {
   }
 
   modifier noTardy {
-    if (num_of_players == 2 && now - lastUpdate > 1 hours) {
+    if (num_of_players == 2 && now - lastUpdate > 3 seconds) {
       kickOut(turn);
-      if (turn == 1){
-        kickedout("Payee");
-      } else {
-        kickedout("Challenger");
-      }
-      
+      kickedout(players[turn].playerAddress);
     }
     _;
   }
@@ -84,7 +83,6 @@ contract Contract {
       players[1] = copyPlayer(2);
     }
     delete players[2];
-
   }
   
   function payeeState() constant returns (uint8[2]) {
@@ -103,9 +101,32 @@ contract Contract {
     return players[2].playerAddress;
   }
 
-  function game_state() constant returns (uint8[3][3]) {
-    return board;
-  }
+
+  /*function print_board() constant returns (string) {
+    bytes memory bytesRow = new bytes(32);
+    //row1
+    bytesRow[0] = bytes1(board[0][0]);
+    bytesRow[1] = "|";
+    bytesRow[2] = bytes1(board[0][1]);
+    bytesRow[3] = "|";
+    bytesRow[4] = bytes1(board[0][2]);
+    bytesRow[5] = "\n";
+    //row2
+    bytesRow[6] = bytes1(board[1][0]);
+    bytesRow[7] = "|";
+    bytesRow[8] = bytes1(board[1][1]);
+    bytesRow[9] = "|";
+    bytesRow[10] = bytes1(board[1][2]);
+    bytesRow[11] = "\n";
+    //row3
+    bytesRow[12] = bytes1(board[2][0]);
+    bytesRow[13] = "|";
+    bytesRow[14] = bytes1(board[2][1]);
+    bytesRow[15] = "|";
+    bytesRow[16] = bytes1(board[2][2]);
+    bytesRow[17] = "\n";
+    return string(bytesRow);
+  } */
   
   /** Setting Up Game*/
   function Contract() {
@@ -157,6 +178,9 @@ contract Contract {
       } else {
           madeMove("Challenger--row: ", _row, "column: ", _col);
       }
+      row_1(board[0]);
+      row_2(board[1]);
+      row_3(board[2]);
       checkWinner();
       changeTurn();
     }
@@ -174,9 +198,13 @@ contract Contract {
     }
   }
 
+  event sentMoney(address player, uint amount);
+
   function sendMoney(address _recipient, uint _amount) private {
     if (!_recipient.send(_amount)) {
       throw;
+    } else {
+      sentMoney(_recipient, _amount);
     }
   }
 
