@@ -1,4 +1,4 @@
-# Ethereum-Projects
-Arbitrage-Web gives cryptocurrency price trends with real-time updating feature and carries out calculation of arbitrage opportunities (currently on a local Python server)
+# crypto-price
+Arbitrage-Web integrates different exchanges' API to pull real-time price data, creates visual graphs accordingly, and finds arbitrage opportunities.
 
-TicTacPonzi is an Ethereum smart contract that combines tic-tac-toe with Ponzi scheme
+TicTacPonzi is an Ethereum smart contract that incorporates the Ponzi scheme into Tic-Tac-Toe.
